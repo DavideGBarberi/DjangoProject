@@ -130,7 +130,7 @@ REST_FRAMEWORK = {
 SPECTACULAR_SETTINGS = {
     'TITLE': 'Gestionale Palestre API',
     'DESCRIPTION': 'Documentazione per il BE del sistema gestionale Clienti/Pacchetti/Rate/Appuntamenti/Reportistica/Gestione Ruoli',
-    'VERSION': '1.0.8',
+    'VERSION': '1.1.8',
     'SERVE_INCLUDE_SCHEMA': False,
     # Altre opzioni come il logo o il tema possono essere aggiunte qui
 }
