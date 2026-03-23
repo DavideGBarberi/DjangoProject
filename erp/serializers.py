@@ -1,6 +1,5 @@
 from rest_framework import serializers
 from .models import Client, Package, Installment, Appointment, User
-from datetime import date, timedelta
 
 class SignupSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
@@ -72,23 +71,14 @@ class PackageSerializer(serializers.ModelSerializer):
         fields = ['id', 'client', 'name', 'total_price', 'number_of_installments', 'installments']
 
     def create(self, validated_data):
-        # 1. Estraiamo il numero di rate e le rimuoviamo dai dati del pacchetto
-        num_rate = validated_data.pop('number_of_installments')
+        # Estraiamo il numero di rate
+        num_installments = validated_data.pop('number_of_installments')
 
-        # 2. Creiamo il pacchetto normalmente
-        package = Package.objects.create(**validated_data)
-
-        # 3. Logica di generazione rate: dividiamo il prezzo totale
-        amount_per_installment = package.total_price / num_rate
-
-        for i in range(num_rate):
-            Installment.objects.create(
-                package=package,
-                amount=amount_per_installment,
-                # Scadenza: oggi + 30 giorni per ogni rata
-                due_date=date.today() + timedelta(days=30 * (i + 1)),
-                is_paid=False
-            )
+        # Creiamo il pacchetto e salviamo il numero di rate come attributo temporaneo
+        # Il signal si occuperà di creare le rate automaticamente
+        package = Package(**validated_data)
+        package._number_of_installments = num_installments
+        package.save()
 
         return package
 
