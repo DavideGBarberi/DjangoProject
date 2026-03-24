@@ -1,6 +1,14 @@
 from rest_framework import serializers
 from .models import Client, Package, Installment, Appointment, User
 
+
+class ExportCSVSerializer(serializers.Serializer):
+    send_email = serializers.BooleanField(
+        default=False,
+        required=False,
+        help_text="If True, send the CSV file via email using Celery. If False, download immediately."
+    )
+
 class SignupSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
     role = serializers.ChoiceField(choices=User.ROLE_CHOICES, default='staff')

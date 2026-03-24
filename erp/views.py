@@ -2,13 +2,15 @@ from django.shortcuts import render
 
 # Create your views here.
 from rest_framework.views import APIView
-from rest_framework import viewsets
+from rest_framework import viewsets, request, status, viewsets
 from rest_framework.response import Response
 from rest_framework.decorators import action
+from drf_spectacular.utils import extend_schema, OpenApiParameter
+from drf_spectacular.types import OpenApiTypes
 from .models import Client, Package, Installment, Appointment, User
 from django.db.models import Sum, Count
 from django.utils import timezone
-from .serializers import ClientSerializer, PackageSerializer, InstallmentSerializer, AppointmentSerializer, SignupSerializer
+from .serializers import ClientSerializer, PackageSerializer, InstallmentSerializer, AppointmentSerializer, SignupSerializer, ExportCSVSerializer
 from rest_framework import generics
 from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework.pagination import PageNumberPagination
@@ -17,6 +19,8 @@ from django_filters.rest_framework import DjangoFilterBackend
 from .filters import PackageFilter, ClientFilter
 from django.http import HttpResponse
 import csv
+from celery import shared_task
+from .tasks import generate_and_send_csv_task
 
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 20
@@ -130,21 +134,57 @@ class ClientViewSet(viewsets.ModelViewSet):
             "last_appointment_title": last_app.title if last_app else "Nessuno",
         })
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name='send_email',
+                type=OpenApiTypes.BOOL,
+                location=OpenApiParameter.QUERY,
+                description='If true, send the CSV file via email using Celery. If false, download immediately.',
+                required=False,
+                default=False
+            )
+        ],
+        responses={
+            200: OpenApiTypes.BINARY,
+            202: {'description': 'Export queued, email will be sent'},
+            400: {'description': 'No clients found'}
+        }
+    )
     @action(detail=False, methods=['get'], url_path='export-csv', permission_classes=[IsAuthenticated])
-    def export_csv(self, queryset):
-        data = self.filter_queryset(self.get_queryset())
+    def export_csv(self, request):
+        # 1. Applichiamo i filtri attivi nella query string (es. ?name=Mario)
+        queryset = self.filter_queryset(self.get_queryset())
 
-        response = HttpResponse(content_type='text/csv')
-        response['Content-Disposition'] = 'attachment; filename="export_clienti.csv"'
+        # 2. Validazione parametro usando serializer
+        serializer = ExportCSVSerializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+        send_email = serializer.validated_data.get('send_email', False)
 
-        writer = csv.writer(response)
-        writer.writerow(['ID', 'Nome Cliente', 'Partita IVA', 'Email'])
+        if not queryset.exists():
+            return Response({"error": "Nessun cliente trovato con i filtri selezionati."},
+                            status=status.HTTP_400_BAD_REQUEST)
 
-        for client in data:
-            writer.writerow([client.id, client.name, client.vat_number, client.email])
+        if send_email:
+            # 3a. Modalità asincrona: inviare via email usando Celery
+            customer_ids = list(queryset.values_list('id', flat=True))
+            generate_and_send_csv_task.delay(customer_ids, request.user.email)
 
+            return Response({
+                "message": "L'esportazione è stata avviata. Riceverai il file via email a breve."
+            }, status=status.HTTP_202_ACCEPTED)
+        else:
+            # 3b. Modalità sincrona: download immediato
+            response = HttpResponse(content_type='text/csv')
+            response['Content-Disposition'] = 'attachment; filename="export_clienti.csv"'
 
-        return response
+            writer = csv.writer(response)
+            writer.writerow(['ID', 'Nome Cliente', 'Partita IVA', 'Email'])
+
+            for client in queryset:
+                writer.writerow([client.id, client.name, client.vat_number, client.email])
+
+            return response
 
 
 class PackageViewSet(viewsets.ModelViewSet):

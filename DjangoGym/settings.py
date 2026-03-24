@@ -28,8 +28,20 @@ DEBUG = config('DEBUG', default=False, cast=bool)
 
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='', cast=Csv())
 
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
+# In produzione (esempio)
+# EMAIL_HOST = 'smtp.gmail.com'
+# EMAIL_PORT = 587
+# EMAIL_USE_TLS = True
+# EMAIL_HOST_USER = 'davideg1.dgb@gmail.com'
 # Application definition
+
+# Forza Celery a NON cercare connessioni esterne
+CELERY_BROKER_URL = 'memory://'
+CELERY_RESULT_BACKEND = 'cache+memory://'
+CELERY_TASK_ALWAYS_EAGER = True
+CELERY_TASK_EAGER_PROPAGATES = True  # Ti mostra gli errori del task direttamente nel terminale
 
 INSTALLED_APPS = [
     'django.contrib.admin',
