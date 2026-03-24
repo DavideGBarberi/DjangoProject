@@ -138,7 +138,7 @@ class ClientViewSet(viewsets.ModelViewSet):
         response['Content-Disposition'] = 'attachment; filename="export_clienti.csv"'
 
         writer = csv.writer(response)
-        writer.writerow(['ID', 'Nome Cliente', 'P. IVA', 'Email'])
+        writer.writerow(['ID', 'Nome Cliente', 'Partita IVA', 'Email'])
 
         for client in data:
             writer.writerow([client.id, client.name, client.vat_number, client.email])
