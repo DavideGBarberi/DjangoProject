@@ -13,6 +13,10 @@ from rest_framework import generics
 from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework.pagination import PageNumberPagination
 from .permissions import IsManagerOrAdmin
+from django_filters.rest_framework import DjangoFilterBackend
+from .filters import PackageFilter, ClientFilter
+from django.http import HttpResponse
+import csv
 
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 20
@@ -89,6 +93,9 @@ class ClientViewSet(viewsets.ModelViewSet):
     pagination_class = StandardResultsSetPagination  # Sovrascrive il default di settings.py
     permission_classes = [IsAuthenticated]
 
+    filter_backends = [DjangoFilterBackend]
+    filterset_class = ClientFilter
+
     @action(detail=True, methods=['get'], permission_classes=[IsManagerOrAdmin]) # <-- PROTEZIONE)
     def summary(self, request, pk=None):
         client = self.get_object()
@@ -123,11 +130,31 @@ class ClientViewSet(viewsets.ModelViewSet):
             "last_appointment_title": last_app.title if last_app else "Nessuno",
         })
 
+    @action(detail=False, methods=['get'], url_path='export-csv', permission_classes=[IsAuthenticated])
+    def export_csv(self, queryset):
+        data = self.filter_queryset(self.get_queryset())
+
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="export_clienti.csv"'
+
+        writer = csv.writer(response)
+        writer.writerow(['ID', 'Nome Cliente', 'P. IVA', 'Email'])
+
+        for client in data:
+            writer.writerow([client.id, client.name, client.vat_number, client.email])
+
+
+        return response
+
 
 class PackageViewSet(viewsets.ModelViewSet):
     queryset = Package.objects.all()
     serializer_class = PackageSerializer
     permission_classes = [IsAuthenticated]
+
+    # Aggiungiamo il backend e la classe di filtro
+    filter_backends = [DjangoFilterBackend]
+    filterset_class = PackageFilter
 
 class InstallmentViewSet(viewsets.ModelViewSet):
     queryset = Installment.objects.all()
