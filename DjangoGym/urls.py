@@ -16,7 +16,7 @@ from rest_framework_simplejwt.views import (
 )
 
 router = DefaultRouter()
-router.register(r'clients', ClientViewSet)
+router.register(r'clients', ClientViewSet, basename='client')
 router.register(r'packages', PackageViewSet)
 router.register(r'installments', InstallmentViewSet)
 router.register(r'appointments', AppointmentViewSet)

@@ -92,11 +92,22 @@ class SignupView(generics.CreateAPIView):
     serializer_class = SignupSerializer
 
 class ClientViewSet(viewsets.ModelViewSet):
-    queryset = Client.objects.all()
     serializer_class = ClientSerializer
+
+
+    #prende id clienti, selecta pacchetti per quegli id clienti, selecta rate per quei pacchetti
+    def get_queryset(self):
+        return Client.objects.annotate(
+            annotated_packages_count=Count('packages', distinct=True),
+            annotated_appointments_count=Count('appointments', distinct=True)
+        ).prefetch_related(
+            'packages',
+            'packages__installments',
+            'appointments'
+        ).order_by('id')
+
     pagination_class = StandardResultsSetPagination  # Sovrascrive il default di settings.py
     permission_classes = [IsAuthenticated]
-
     filter_backends = [DjangoFilterBackend]
     filterset_class = ClientFilter
 

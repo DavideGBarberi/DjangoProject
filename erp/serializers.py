@@ -93,10 +93,9 @@ class PackageSerializer(serializers.ModelSerializer):
 class ClientSerializer(serializers.ModelSerializer):
     # Mostriamo i pacchetti all'interno del cliente (Nested)
     packages = PackageSerializer(many=True, read_only=True)
-    packages_count = serializers.IntegerField(source='packages.count', read_only=True)
-
+    packages_count = serializers.IntegerField(read_only=True, source='annotated_packages_count')
     appointments = AppointmentSerializer(many=True, read_only=True)
-    appointments_count = serializers.IntegerField(source='appointments.count', read_only=True)
+    appointments_count = serializers.IntegerField(read_only=True, source='annotated_appointments_count')
 
     class Meta:
         model = Client
