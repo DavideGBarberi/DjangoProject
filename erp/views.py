@@ -10,7 +10,7 @@ from drf_spectacular.types import OpenApiTypes
 from .models import Client, Package, Installment, Appointment, User
 from django.db.models import Sum, Count
 from django.utils import timezone
-from .serializers import ClientSerializer, PackageSerializer, InstallmentSerializer, AppointmentSerializer, SignupSerializer, ExportCSVSerializer
+from .serializers import ClientSerializer, PackageSerializer, InstallmentSerializer, AppointmentSerializer, SignupSerializer, ExportCSVSerializer, ChatMessageSerializer, ChatResponseSerializer
 from rest_framework import generics
 from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework.pagination import PageNumberPagination
@@ -21,6 +21,15 @@ from django.http import HttpResponse
 import csv
 from celery import shared_task
 from .tasks import generate_and_send_csv_task
+from groq import Groq
+from django.conf import settings
+from .chatbot_config import (
+    CHATBOT_SYSTEM_PROMPT,
+    CHATBOT_MODEL,
+    CHATBOT_TEMPERATURE,
+    CHATBOT_MAX_TOKENS,
+    CHATBOT_MAX_HISTORY_MESSAGES
+)
 
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 20
@@ -216,3 +225,71 @@ class AppointmentViewSet(viewsets.ModelViewSet):
     queryset = Appointment.objects.all()
     serializer_class = AppointmentSerializer
     permission_classes = [IsAuthenticated]
+
+
+class ChatbotView(APIView):
+    """
+    AI-powered chatbot to guide users through the gym management system.
+    Uses Groq's LLM API to provide intelligent assistance.
+    """
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        request=ChatMessageSerializer,
+        responses={200: ChatResponseSerializer},
+        description="Chat with AI assistant to get help with the gym management system"
+    )
+    def post(self, request):
+        # Validate input
+        serializer = ChatMessageSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        user_message = serializer.validated_data['message']
+        conversation_history = serializer.validated_data.get('conversation_history', [])
+
+        try:
+            # Initialize Groq client with API key from settings
+            client = Groq(api_key=settings.GROQ_API_KEY)
+
+            # Build messages for the API
+            messages = [{"role": "system", "content": CHATBOT_SYSTEM_PROMPT}]
+
+            # Add conversation history
+            messages.extend(conversation_history)
+
+            # Add current user message
+            messages.append({"role": "user", "content": user_message})
+
+            # Call Groq API with configuration from chatbot_config
+            chat_completion = client.chat.completions.create(
+                messages=messages,
+                model=CHATBOT_MODEL,
+                temperature=CHATBOT_TEMPERATURE,
+                max_tokens=CHATBOT_MAX_TOKENS,
+            )
+
+            # Get assistant response
+            assistant_response = chat_completion.choices[0].message.content
+
+            # Update conversation history
+            updated_history = conversation_history + [
+                {"role": "user", "content": user_message},
+                {"role": "assistant", "content": assistant_response}
+            ]
+
+            # Limit history to configured max messages to avoid token limits
+            if len(updated_history) > CHATBOT_MAX_HISTORY_MESSAGES:
+                updated_history = updated_history[-CHATBOT_MAX_HISTORY_MESSAGES:]
+
+            response_data = {
+                "response": assistant_response,
+                "conversation_history": updated_history
+            }
+
+            return Response(response_data, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response(
+                {"error": f"Chatbot error: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

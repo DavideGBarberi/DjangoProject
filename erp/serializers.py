@@ -9,6 +9,45 @@ class ExportCSVSerializer(serializers.Serializer):
         help_text="If True, send the CSV file via email using Celery. If False, download immediately."
     )
 
+
+class ConversationMessageSerializer(serializers.Serializer):
+    role = serializers.ChoiceField(choices=['user', 'assistant'], required=True)
+    content = serializers.CharField(required=True)
+
+
+class ChatMessageSerializer(serializers.Serializer):
+    message = serializers.CharField(
+        required=True,
+        help_text="User's message to the chatbot",
+        min_length=1,
+        max_length=2000
+    )
+    conversation_history = serializers.ListField(
+        child=ConversationMessageSerializer(),
+        required=False,
+        default=list,
+        help_text="Previous conversation history (optional). Each message must have 'role' (user/assistant) and 'content' fields."
+    )
+
+    def validate_conversation_history(self, value):
+        """Ensure conversation history has valid structure"""
+        validated_history = []
+        for msg in value:
+            if isinstance(msg, dict) and 'role' in msg and 'content' in msg:
+                validated_history.append({
+                    'role': msg['role'],
+                    'content': msg['content']
+                })
+        return validated_history
+
+
+class ChatResponseSerializer(serializers.Serializer):
+    response = serializers.CharField(help_text="Chatbot's response")
+    conversation_history = serializers.ListField(
+        child=serializers.DictField(),
+        help_text="Updated conversation history"
+    )
+
 class SignupSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
     role = serializers.ChoiceField(choices=User.ROLE_CHOICES, default='staff')

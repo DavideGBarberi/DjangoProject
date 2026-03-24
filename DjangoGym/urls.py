@@ -8,6 +8,7 @@ from erp.views import (
     AppointmentViewSet,
     SignupView,
     GlobalStatsView,
+    ChatbotView,
 )
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView, SpectacularYAMLAPIView
 from rest_framework_simplejwt.views import (
@@ -35,5 +36,6 @@ urlpatterns = [
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
     path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
     path('api/auth/', include((auth_patterns, 'auth'))),
-    path('api/stats/', GlobalStatsView.as_view(), name='global-stats'), # Deve essere qui
+    path('api/stats/', GlobalStatsView.as_view(), name='global-stats'),
+    path('api/chatbot/', ChatbotView.as_view(), name='chatbot'),
 ]

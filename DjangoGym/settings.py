@@ -154,6 +154,9 @@ SPECTACULAR_SETTINGS = {
 
 AUTH_USER_MODEL = 'erp.User'
 
+# Groq AI Configuration
+GROQ_API_KEY = config('GROQ_API_KEY')
+
 LOGGING = {
     'version': 1,  # <--- AGGIUNGI QUESTA RIGA
     'disable_existing_loggers': False, # È buona norma aggiungerlo per non spegnere i log di default
