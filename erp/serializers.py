@@ -107,6 +107,29 @@ class InstallmentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Installment
         fields = '__all__'
+        # extra_kwargs ci permette di aggiungere regole ai campi del modello
+        extra_kwargs = {
+            'amount': {
+                'required': True,  # Impedisce l'invio di dati nulli o mancanti
+                'min_value': 0.01,  # Coerenza: una rata deve essere positiva (es. min 1 centesimo)
+                'help_text': "L'importo della rata deve essere maggiore di zero."
+            },
+            'due_date': {
+                'required': True,
+                'help_text': "La data di scadenza è obbligatoria."
+            }
+        }
+
+    def validate(self, data):
+        """
+        Validazione di oggetto: controlliamo la logica tra più campi.
+        """
+        # Esempio: Non posso segnare come pagata una rata che non ha ancora una data di scadenza
+        if data.get('is_paid') and not data.get('due_date'):
+            raise serializers.ValidationError(
+                "Non puoi segnare come pagata una rata senza una data di scadenza definita."
+            )
+        return data
 
 class PackageSerializer(serializers.ModelSerializer):
     # Campo aggiuntivo solo per la POST (non salvato nel DB)
@@ -116,6 +139,9 @@ class PackageSerializer(serializers.ModelSerializer):
     class Meta:
         model = Package
         fields = ['id', 'client', 'name', 'total_price', 'number_of_installments', 'installments']
+        extra_kwargs = {
+            'total_price': {'min_value': 0}  # Blocca l'input negativo qui
+        }
 
     def create(self, validated_data):
         # Estraiamo il numero di rate

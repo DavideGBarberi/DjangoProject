@@ -120,38 +120,45 @@ class ClientViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend]
     filterset_class = ClientFilter
 
-    @action(detail=True, methods=['get'], permission_classes=[IsManagerOrAdmin]) # <-- PROTEZIONE)
+
+    @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated])
     def summary(self, request, pk=None):
         client = self.get_object()
 
-        # 1. Calcolo del debito totale (Somma rate non pagate)
-        # Accediamo a tutte le rate attraverso la relazione: client -> packages -> installments
+        # --- 1. DATI AGGREGATI (Quelli che avevi già) ---
         total_debt = Installment.objects.filter(
             package__client=client,
             is_paid=False
-        ).aggregate(Sum('amount'))['amount__sum'] or 0.00
+        ).aggregate(total=Sum('amount'))['total'] or 0.00
 
-        # 2. Prossimo appuntamento (Il primo nel futuro)
-        next_app = client.appointments.filter(
-            start_time__gte=timezone.now()
-        ).order_by('start_time').first()
+        # --- 2. IL GROUP BY (La novità) ---
+        # Vogliamo sapere il debito residuo per ogni singolo pacchetto del cliente
+        debt_by_package = Installment.objects.filter(
+            package__client=client,
+            is_paid=False
+        ).values(
+            'package__name'  # Raggruppiamo per il nome del pacchetto
+        ).annotate(
+            remining_amount=Sum('amount')  # Sommiamo le rate per quel gruppo
+        ).order_by('-remining_amount')
 
-        # 3. ULTIMO Appuntamento (il più recente nel passato)
-        last_app = client.appointments.filter(
-            start_time__lt=timezone.now()
-        ).order_by('-start_time').first()  # Il segno '-' indica ordine decrescente
-
-        # 4. Conteggio pacchetti attivi
-        active_packages = client.packages.count()
+        # --- 3. LOGICA APPUNTAMENTI (Inalterata) ---
+        next_app = client.appointments.filter(start_time__gte=timezone.now()).order_by('start_time').first()
+        last_app = client.appointments.filter(start_time__lt=timezone.now()).order_by('-start_time').first()
 
         return Response({
             "client_name": client.name,
             "total_debt": total_debt,
-            "active_packages_count": active_packages,
-            "next_appointment": next_app.start_time if next_app else None,
-            "next_appointment_title": next_app.title if next_app else "Nessuno",
-            "last_appointment": last_app.start_time if last_app else None,
-            "last_appointment_title": last_app.title if last_app else "Nessuno",
+            "debt_breakdown": list(debt_by_package),  # <--- Inseriamo la lista raggruppata
+            "active_packages_count": client.packages.count(),
+            "next_appointment": {
+                "time": next_app.start_time if next_app else None,
+                "title": next_app.title if next_app else "Nessuno"
+            },
+            "last_appointment": {
+                "time": last_app.start_time if last_app else None,
+                "title": last_app.title if last_app else "Nessuno"
+            },
         })
 
     @extend_schema(

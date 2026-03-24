@@ -23,11 +23,28 @@ class Client(models.Model):
         return self.name
 
 
+from django.db import models
+from django.core.validators import MinValueValidator
+
 class Package(models.Model):
     client = models.ForeignKey('erp.Client', on_delete=models.CASCADE, related_name='packages')
-    name = models.CharField(max_length=100) # Es: "Abbonamento Gold"
-    total_price = models.DecimalField(max_digits=10, decimal_places=2)
+    name = models.CharField(max_length=100)
+    total_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        # 1. Difesa lato Python (per i Form e l'Admin)
+        validators=[MinValueValidator(0.01)]
+    )
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            # 2. Difesa lato Database (L'ultima parola)
+            models.CheckConstraint(
+                condition=models.Q(total_price__gt=0), # USA 'condition'
+                name='total_price_must_be_positive'
+            )
+        ]
 
     def __str__(self):
         return f"{self.name} - {self.client.name}"
